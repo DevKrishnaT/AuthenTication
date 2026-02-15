@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import bcrypt from "bcrypt";
 import cors from "cors";
 import users from "./models/User.js";
+import jwt from "jsonwebtoken";
+
 
 dotenv.config();
 const app = express();
@@ -47,6 +49,80 @@ app.post("/signup", async (req, res) => {
   }
 });
 
+//// get login
+
+app.post('/login' , async (req , res)=>{
+  try {
+    const {email , password} = req.body;
+
+    if(!email || !password){
+      return res.status(400).json({ message: "Email and password required" });
+
+    }
+
+    const user = await users.findOne({email});
+
+
+    if(!user){
+      return res.status(404).json({message: "Invalid credentials"});
+    }
+
+    const isMatch = await bcrypt.compare(password , user.password);
+
+
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+     {id: user._id},
+     process.env.JWT_SECRET,
+     {expiresIn: "1d"}
+    )
+
+     res.json({
+      message: "Login successful",
+      token
+    });
+
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+})
+
+
+
+///// medle wair
+
+
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "No token provided" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(403).json({ message: "Invalid token" });
+  }
+};
+
+
+
+app.get("/profile", verifyToken, async (req, res) => {
+  const user = await users.findById(req.user.id).select("-password");
+  res.json(user);
+});
+
+
+
 app.get("/", (req, res) => {
   res.json({ message: "Hello" });
 });
@@ -57,7 +133,7 @@ const startServer = async () => {
     console.log("MongoDB connected");
 
     app.listen(3000, () => {
-      console.log("Server running on port 4000");
+      console.log("Server running on port 3000");
     });
 
   } catch (error) {
